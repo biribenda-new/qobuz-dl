@@ -125,8 +125,7 @@ def tag_flac(filename, root_dir, final_name, d, album, istrack=True, em_image=Fa
 
     audio["TRACKNUMBER"] = str(d["track_number"])  # TRACK NUMBER
 
-    if "Disc " in final_name:
-        audio["DISCNUMBER"] = str(d["media_number"])
+    audio["DISCNUMBER"] = str(d["media_number"])
 
     try:
         audio["COMPOSER"] = d["composer"]["name"]  # COMPOSER
@@ -154,6 +153,7 @@ def tag_flac(filename, root_dir, final_name, d, album, istrack=True, em_image=Fa
         audio["TRACKTOTAL"] = str(album["tracks_count"])
         audio["ALBUM"] = album["title"]
         audio["DATE"] = album["release_date_original"]
+        audio["YEAR_RELEASED"] = album["release_date_original"].split('-')[0]
         audio["COPYRIGHT"] = _format_copyright(album.get("copyright", "n/a"))
 
     if em_image:

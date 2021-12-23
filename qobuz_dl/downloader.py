@@ -5,6 +5,8 @@ from typing import Tuple
 import requests
 from pathvalidate import sanitize_filename
 from tqdm import tqdm
+from PIL import Image
+from resizeimage import resizeimage
 
 import qobuz_dl.metadata as metadata
 from qobuz_dl.color import OFF, GREEN, RED, YELLOW, CYAN
@@ -98,6 +100,7 @@ class Download:
             self.folder_format, self.track_format, file_format
         )
         sanitized_title = sanitize_filename(folder_format.format(**album_attr))
+        sanitized_title = sanitized_title.replace('FOLDER_BREAK','/')
         dirn = os.path.join(self.path, sanitized_title)
         os.makedirs(dirn, exist_ok=True)
 
@@ -156,7 +159,7 @@ class Download:
                 meta, track_title, bit_depth, sampling_rate
             )
             sanitized_title = sanitize_filename(folder_format.format(**track_attr))
-
+            sanitized_title = sanitized_title.replace('FOLDER_BREAK','/')
             dirn = os.path.join(self.path, sanitized_title)
             os.makedirs(dirn, exist_ok=True)
             if self.no_cover:
@@ -248,6 +251,7 @@ class Download:
             "sampling_rate": track_metadata["maximum_sampling_rate"],
             "tracktitle": track_title,
             "version": track_metadata.get("version"),
+            "disknumber": f"{track_metadata['media_number']:02}",
             "tracknumber": f"{track_metadata['track_number']:02}",
         }
 
@@ -257,7 +261,7 @@ class Download:
             "album": meta["album"]["title"],
             "artist": meta["album"]["artist"]["name"],
             "tracktitle": track_title,
-            "year": meta["album"]["release_date_original"].split("-")[0],
+            "year": meta["release_date_original"].split("-")[0],
             "bit_depth": bit_depth,
             "sampling_rate": sampling_rate,
         }
@@ -320,6 +324,20 @@ def tqdm_download(url, fname, track_name):
             size = file.write(data)
             bar.update(size)
 
+def req_tqdmImage(url, dirn, fname, track_name):
+    tqdm_download(url,dirn+fname, track_name)
+    fd_img = open(dirn+fname, 'rb')
+    img = Image.open(fd_img)
+    img = resizeimage.resize_contain(img, [500, 500])
+    img = img.convert("RGB")
+    logger.info(f"{OFF}{fname} saving to ")
+    logger.info(f"{OFF}{dirn} ")
+    img.save(dirn+'/cover.jpg', img.format, quality=95)
+    fd_img.close()
+    if os.path.exists(dirn+fname):
+        os.remove(dirn+fname)
+    else:
+        print("The file does not exist") 
 
 def _get_description(item: dict, track_title, multiple=None):
     downloading_title = f"{track_title} "
@@ -341,7 +359,7 @@ def _get_title(item_dict):
     return album_title
 
 
-def _get_extra(item, dirn, extra="cover.jpg", og_quality=False):
+def _get_extra_orig(item, dirn, extra="cover.jpg", og_quality=False):
     extra_file = os.path.join(dirn, extra)
     if os.path.isfile(extra_file):
         logger.info(f"{OFF}{extra} was already downloaded")
@@ -352,6 +370,21 @@ def _get_extra(item, dirn, extra="cover.jpg", og_quality=False):
         extra,
     )
 
+def _get_extra(item, dirn, extra="cover.jpg", og_quality=False):
+    logger.info(f"{OFF}{extra} is the filename")
+    if extra != 'cover.jpg':
+        _get_extra_orig(item, dirn, extra, og_quality)
+    else:
+        extra_file = os.path.join(dirn, extra)
+        if os.path.isfile(extra_file):
+            logger.info(f"{OFF}{extra} was already downloaded")
+            return
+        req_tqdmImage(
+            item.replace("_600.", "_org.") if og_quality else item,
+            dirn,
+            extra,
+            extra_file
+        )
 
 def _clean_format_str(folder: str, track: str, file_format: str) -> Tuple[str, str]:
     """Cleans up the format strings, avoids errors
@@ -376,7 +409,6 @@ def _clean_format_str(folder: str, track: str, file_format: str) -> Tuple[str, s
             )
             fs = default
         final.append(fs)
-
     return tuple(final)
 
 
